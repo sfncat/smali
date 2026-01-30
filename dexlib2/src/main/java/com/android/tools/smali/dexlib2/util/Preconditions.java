@@ -49,6 +49,11 @@ import java.util.List;
 
 public class Preconditions {
     public static void checkFormat(Opcode opcode, Format expectedFormat) {
+        if (opcode == null) {
+            throw new IllegalArgumentException(
+                    String.format("Unknown or unsupported opcode for format %s. " +
+                            "The instruction may not be supported at the current API level.", expectedFormat.name()));
+        }
         if (opcode.format != expectedFormat) {
             throw new IllegalArgumentException(
                     String.format("Invalid opcode %s for %s", opcode.name, expectedFormat.name()));

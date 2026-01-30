@@ -33,6 +33,7 @@ package com.android.tools.smali.smali;
 import com.google.common.collect.Lists;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -95,30 +96,69 @@ public class Smali {
             }
         }
 
+        // Filter out excluded files
+        TreeSet<File> filteredFiles = new TreeSet<File>();
+        int excludedCount = 0;
+        for (File file : filesToProcessSet) {
+            if (options.shouldExclude(file.getAbsolutePath())) {
+                excludedCount++;
+                if (options.verboseErrors) {
+                    System.err.println("Excluding: " + file.getAbsolutePath());
+                }
+            } else {
+                filteredFiles.add(file);
+            }
+        }
+        if (excludedCount > 0) {
+            System.err.println("Excluded " + excludedCount + " file(s) based on exclude patterns.");
+        }
+
         boolean errors = false;
+        List<String> failedFiles = new ArrayList<>();
 
         final DexBuilder dexBuilder = new DexBuilder(Opcodes.forApi(options.apiLevel));
 
         ExecutorService executor = Executors.newFixedThreadPool(options.jobs);
-        List<Future<Boolean>> tasks = Lists.newArrayList();
+        List<Future<AssembleResult>> tasks = Lists.newArrayList();
 
-        for (final File file: filesToProcessSet) {
-            tasks.add(executor.submit(new Callable<Boolean>() {
-                @Override public Boolean call() throws Exception {
-                    return assembleSmaliFile(file, dexBuilder, options);
+        for (final File file: filteredFiles) {
+            tasks.add(executor.submit(new Callable<AssembleResult>() {
+                @Override public AssembleResult call() {
+                    try {
+                        boolean success = assembleSmaliFile(file, dexBuilder, options);
+                        return new AssembleResult(file, success, null);
+                    } catch (Exception e) {
+                        return new AssembleResult(file, false, e);
+                    }
                 }
             }));
         }
 
-        for (Future<Boolean> task: tasks) {
+        for (Future<AssembleResult> task: tasks) {
             while(true) {
                 try {
                     try {
-                        if (!task.get()) {
+                        AssembleResult result = task.get();
+                        if (!result.success) {
                             errors = true;
+                            failedFiles.add(result.file.getAbsolutePath());
+                            if (result.exception != null) {
+                                System.err.println("Error assembling " + result.file.getAbsolutePath() + ": " + result.exception.getMessage());
+                                if (options.verboseErrors) {
+                                    result.exception.printStackTrace(System.err);
+                                }
+                            }
+                            if (!options.continueOnError) {
+                                executor.shutdownNow();
+                                throw new RuntimeException("Assembly failed for: " + result.file.getAbsolutePath(), result.exception);
+                            }
                         }
                     } catch (ExecutionException ex) {
-                        throw new RuntimeException(ex);
+                        if (!options.continueOnError) {
+                            throw new RuntimeException(ex);
+                        }
+                        errors = true;
+                        System.err.println("Execution error: " + ex.getMessage());
                     }
                 } catch (InterruptedException ex) {
                     continue;
@@ -129,13 +169,43 @@ public class Smali {
 
         executor.shutdown();
 
-        if (errors) {
+        if (errors && !options.continueOnError) {
             return false;
         }
 
-        dexBuilder.writeTo(new FileDataStore(new File(options.outputDexFile)));
+        // Report summary if there were errors but we continued
+        if (!failedFiles.isEmpty()) {
+            System.err.println("\n=== Assembly completed with errors ===");
+            System.err.println("Failed files (" + failedFiles.size() + "):");
+            for (String path : failedFiles) {
+                System.err.println("  - " + path);
+            }
+            System.err.println("Successfully processed: " + (filteredFiles.size() - failedFiles.size()) + " files");
+        }
 
-        return true;
+        // Only write dex if we have successfully processed at least some files
+        if (filteredFiles.size() - failedFiles.size() > 0) {
+            dexBuilder.writeTo(new FileDataStore(new File(options.outputDexFile)));
+            return !errors || options.continueOnError;
+        } else {
+            System.err.println("No files were successfully assembled. Dex file not written.");
+            return false;
+        }
+    }
+
+    /**
+     * Helper class to store assembly result
+     */
+    private static class AssembleResult {
+        final File file;
+        final boolean success;
+        final Exception exception;
+
+        AssembleResult(File file, boolean success, Exception exception) {
+            this.file = file;
+            this.success = success;
+            this.exception = exception;
+        }
     }
 
     /**

@@ -30,6 +30,10 @@
 
 package com.android.tools.smali.smali;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+
 public class SmaliOptions {
     public int apiLevel = 15;
     public String outputDexFile = "out.dex";
@@ -38,4 +42,41 @@ public class SmaliOptions {
     public boolean allowOdexOpcodes = false;
     public boolean verboseErrors = false;
     public boolean printTokens = false;
+
+    /**
+     * If true, continue processing other files even when some files fail to assemble.
+     * Failed files will be skipped and errors will be reported.
+     */
+    public boolean continueOnError = false;
+
+    /**
+     * List of path patterns to exclude from assembly.
+     * Files matching any of these patterns will be skipped.
+     * Pattern format: substring match on file path (e.g., "com/alibaba/fastjson2")
+     */
+    public List<String> excludePatterns = new ArrayList<>();
+
+    /**
+     * Compiled exclude patterns for efficient matching.
+     */
+    private List<Pattern> compiledExcludePatterns = null;
+
+    /**
+     * Check if a file path should be excluded based on exclude patterns.
+     * @param filePath the file path to check
+     * @return true if the file should be excluded
+     */
+    public boolean shouldExclude(String filePath) {
+        if (excludePatterns.isEmpty()) {
+            return false;
+        }
+        // Normalize path separators
+        String normalizedPath = filePath.replace('\\', '/');
+        for (String pattern : excludePatterns) {
+            if (normalizedPath.contains(pattern)) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

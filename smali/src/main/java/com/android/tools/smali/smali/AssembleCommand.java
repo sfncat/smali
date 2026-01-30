@@ -76,6 +76,15 @@ public class AssembleCommand extends Command {
             description = "Allows the odex opcodes that dalvik doesn't reject to be assembled.")
     private boolean allowOdexOpcodes;
 
+    @Parameter(names = {"--continue-on-error", "-c"},
+            description = "Continue processing other files even when some files fail to assemble.")
+    private boolean continueOnError = false;
+
+    @Parameter(names = {"--exclude", "-x"},
+            description = "Exclude files matching the given path pattern (can be specified multiple times).")
+    @ExtendedParameter(argumentNames = "pattern")
+    private List<String> excludePatterns = new java.util.ArrayList<>();
+
     @Parameter(description = "Assembles the given files. If a directory is specified, it will be " +
             "recursively searched for any files with a .smali prefix")
     @ExtendedParameter(argumentNames = "[<file>|<dir>]+")
@@ -106,6 +115,8 @@ public class AssembleCommand extends Command {
         options.outputDexFile = output;
         options.allowOdexOpcodes = allowOdexOpcodes;
         options.verboseErrors = verbose;
+        options.continueOnError = continueOnError;
+        options.excludePatterns = excludePatterns;
 
         return options;
     }
