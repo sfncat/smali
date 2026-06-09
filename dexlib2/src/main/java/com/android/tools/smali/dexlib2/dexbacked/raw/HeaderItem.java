@@ -90,6 +90,19 @@ public class HeaderItem {
     public static final int CONTAINER_SIZE_OFFSET = 112;
     public static final int CONTAINER_OFF_OFFSET = 116;
 
+    /**
+     * The legacy dex header size (pre-v41, also used by some "pseudo v41" dex files
+     * whose magic claims v41 but whose layout is still legacy).
+     */
+    public static final int LEGACY_HEADER_SIZE = 0x70;
+
+    /**
+     * The minimum header size of a real DEX v41 container, which adds the
+     * {@code container_size} (offset 0x70) and {@code container_off} (offset 0x74)
+     * fields after the legacy header.
+     */
+    public static final int CONTAINER_HEADER_SIZE = 0x78;
+
     @Nonnull private DexBackedDexFile dexFile;
 
     public HeaderItem(@Nonnull DexBackedDexFile dexFile) {
@@ -314,6 +327,43 @@ public class HeaderItem {
 
     public static boolean isSupportedDexVersion(int version) {
         return VersionMap.mapDexVersionToApi(version) != VersionMap.NO_VERSION;
+    }
+
+    /**
+     * Reads the {@code header_size} field directly from a raw byte buffer, without requiring
+     * a {@link DexBackedDexFile} instance.
+     *
+     * @param buf A byte array containing at least the first 40 bytes of a dex file
+     * @param offset The offset within the array to the dex header
+     * @return The value of the {@code header_size} field
+     */
+    public static int getHeaderSize(byte[] buf, int offset) {
+        int o = offset + HEADER_SIZE_OFFSET;
+        return  (buf[o]     & 0xff)
+             | ((buf[o + 1] & 0xff) << 8)
+             | ((buf[o + 2] & 0xff) << 16)
+             | ((buf[o + 3] & 0xff) << 24);
+    }
+
+    /**
+     * Returns whether the given header describes a real DEX v41 container, i.e. the magic
+     * claims version &ge; 41 AND {@code header_size} is at least {@link #CONTAINER_HEADER_SIZE}.
+     *
+     * <p>Some vendor toolchains (e.g. Huawei/HOS) emit "pseudo v41" dex files whose magic
+     * claims v41 but whose {@code header_size} is still {@link #LEGACY_HEADER_SIZE}. In that
+     * case the bytes at offsets 0x70/0x74 are not container fields but the start of
+     * {@code string_ids[]}, and they must not be interpreted as {@code container_size} /
+     * {@code container_off}.
+     */
+    public static boolean isContainerDex(byte[] buf, int offset) {
+        int version = getVersion(buf, offset);
+        if (version < 41) {
+            return false;
+        }
+        if (buf.length - offset < HEADER_SIZE_OFFSET + 4) {
+            return false;
+        }
+        return getHeaderSize(buf, offset) >= CONTAINER_HEADER_SIZE;
     }
 
     public static int getEndian(byte[] buf, int offset) {

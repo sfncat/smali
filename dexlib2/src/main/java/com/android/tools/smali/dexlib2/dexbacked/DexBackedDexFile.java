@@ -90,6 +90,7 @@ public class DexBackedDexFile implements DexFile {
     private final int classStartOffset;
     private final int mapOffset;
     private final int hiddenApiRestrictionsOffset;
+    private final boolean container;
 
     protected DexBackedDexFile(@Nullable Opcodes opcodes, @Nonnull byte[] buf, int offset, boolean verifyMagic) {
         this(opcodes, buf, offset, verifyMagic, 0);
@@ -134,12 +135,30 @@ public class DexBackedDexFile implements DexFile {
         }
 
         int container_off = 0;
-        if (dexVersion >= 41) {
-          container_off = dexBuffer.readSmallUint(header_offset + HeaderItem.CONTAINER_OFF_OFFSET);
+        // A real DEX v41 container also requires header_size >= 0x78. Some vendor
+        // toolchains (e.g. Huawei/HOS) emit "pseudo v41" dex files whose magic
+        // claims v41 but whose header_size is still 0x70 (legacy layout). In that
+        // case the bytes at offsets 0x70/0x74 are the start of string_ids[] and
+        // must NOT be interpreted as container_size / container_off.
+        int headerSize = dexBuffer.readSmallUint(header_offset + HeaderItem.HEADER_SIZE_OFFSET);
+        boolean realContainer =
+                dexVersion >= 41 && headerSize >= HeaderItem.CONTAINER_HEADER_SIZE;
+        if (realContainer) {
+            container_off = dexBuffer.readSmallUint(
+                    header_offset + HeaderItem.CONTAINER_OFF_OFFSET);
+            if (container_off != header_offset) {
+                throw new DexUtil.InvalidFile(String.format(
+                        "Unexpected container offset in header: expected 0x%x, got 0x%x",
+                        header_offset, container_off));
+            }
+        } else if (dexVersion >= 41 && header_offset != 0) {
+            // A pseudo v41 dex must not appear at a non-zero offset, since that would
+            // imply it lives inside a container, which it does not actually support.
+            throw new DexUtil.InvalidFile(String.format(
+                    "Pseudo v41 dex (header_size=0x%x) cannot appear at non-zero offset 0x%x",
+                    headerSize, header_offset));
         }
-        if (container_off != header_offset) {
-          throw new DexUtil.InvalidFile(String.format("Unexpected container offset in header"));
-        }
+        this.container = realContainer;
     }
 
     /**
@@ -155,6 +174,16 @@ public class DexBackedDexFile implements DexFile {
      */
     public int getFileSize() {
         return fileSize;
+    }
+
+    /**
+     * @return Whether this dex file is a real DEX v41 container (i.e. its magic claims v41
+     * AND its {@code header_size} is at least 0x78). For "pseudo v41" dex files whose
+     * {@code header_size} is still 0x70, this returns {@code false} and the file is treated
+     * as a single legacy-layout dex.
+     */
+    public boolean isContainer() {
+        return container;
     }
 
     protected int getVersion(byte[] buf, int offset, boolean verifyMagic) {
