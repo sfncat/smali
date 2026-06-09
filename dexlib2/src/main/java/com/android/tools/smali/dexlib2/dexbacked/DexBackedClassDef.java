@@ -207,11 +207,19 @@ public class DexBackedClassDef extends BaseTypeReference implements ClassDef {
                                 DexBackedField item = new DexBackedField(dexFile, reader, DexBackedClassDef.this,
                                         previousIndex, staticInitialValueIterator, annotationIterator,
                                         hiddenApiRestrictions);
-                                FieldReference currentField = previousField;
-                                FieldReference nextField = ImmutableFieldReference.of(item);
-
-                                previousField = nextField;
                                 previousIndex = item.fieldIndex;
+                                FieldReference currentField = previousField;
+                                FieldReference nextField;
+                                try {
+                                    nextField = ImmutableFieldReference.of(item);
+                                } catch (RuntimeException ex) {
+                                    System.err.println("dexlib2: skip malformed static field in "
+                                            + DexBackedClassDef.this.getType()
+                                            + " (fieldIndex=" + item.fieldIndex + "): " + ex.getMessage());
+                                    previousField = null;
+                                    continue;
+                                }
+                                previousField = nextField;
 
                                 if (skipDuplicates && currentField != null && currentField.equals(nextField)) {
                                     continue;
@@ -275,11 +283,19 @@ public class DexBackedClassDef extends BaseTypeReference implements ClassDef {
 
                                 DexBackedField item = new DexBackedField(dexFile, reader, DexBackedClassDef.this,
                                         previousIndex, annotationIterator, hiddenApiRestrictions);
-                                FieldReference currentField = previousField;
-                                FieldReference nextField = ImmutableFieldReference.of(item);
-
-                                previousField = nextField;
                                 previousIndex = item.fieldIndex;
+                                FieldReference currentField = previousField;
+                                FieldReference nextField;
+                                try {
+                                    nextField = ImmutableFieldReference.of(item);
+                                } catch (RuntimeException ex) {
+                                    System.err.println("dexlib2: skip malformed instance field in "
+                                            + DexBackedClassDef.this.getType()
+                                            + " (fieldIndex=" + item.fieldIndex + "): " + ex.getMessage());
+                                    previousField = null;
+                                    continue;
+                                }
+                                previousField = nextField;
 
                                 if (skipDuplicates && currentField != null && currentField.equals(nextField)) {
                                     continue;
@@ -354,11 +370,19 @@ public class DexBackedClassDef extends BaseTypeReference implements ClassDef {
                                 DexBackedMethod item = new DexBackedMethod(dexFile, reader, DexBackedClassDef.this,
                                         previousIndex, methodAnnotationIterator, parameterAnnotationIterator,
                                         hiddenApiRestrictions);
-                                MethodReference currentMethod = previousMethod;
-                                MethodReference nextMethod = ImmutableMethodReference.of(item);
-
-                                previousMethod = nextMethod;
                                 previousIndex = item.methodIndex;
+                                MethodReference currentMethod = previousMethod;
+                                MethodReference nextMethod;
+                                try {
+                                    nextMethod = ImmutableMethodReference.of(item);
+                                } catch (RuntimeException ex) {
+                                    System.err.println("dexlib2: skip malformed direct method in "
+                                            + DexBackedClassDef.this.getType()
+                                            + " (methodIndex=" + item.methodIndex + "): " + ex.getMessage());
+                                    previousMethod = null;
+                                    continue;
+                                }
+                                previousMethod = nextMethod;
 
                                 if (skipDuplicates && currentMethod != null && currentMethod.equals(nextMethod)) {
                                     continue;
@@ -420,11 +444,19 @@ public class DexBackedClassDef extends BaseTypeReference implements ClassDef {
                                 DexBackedMethod item = new DexBackedMethod(dexFile, reader, DexBackedClassDef.this,
                                         previousIndex, methodAnnotationIterator, parameterAnnotationIterator,
                                         hiddenApiRestrictions);
-                                MethodReference currentMethod = previousMethod;
-                                MethodReference nextMethod = ImmutableMethodReference.of(item);
-
-                                previousMethod = nextMethod;
                                 previousIndex = item.methodIndex;
+                                MethodReference currentMethod = previousMethod;
+                                MethodReference nextMethod;
+                                try {
+                                    nextMethod = ImmutableMethodReference.of(item);
+                                } catch (RuntimeException ex) {
+                                    System.err.println("dexlib2: skip malformed virtual method in "
+                                            + DexBackedClassDef.this.getType()
+                                            + " (methodIndex=" + item.methodIndex + "): " + ex.getMessage());
+                                    previousMethod = null;
+                                    continue;
+                                }
+                                previousMethod = nextMethod;
 
                                 if (skipDuplicates && currentMethod != null && currentMethod.equals(nextMethod)) {
                                     continue;

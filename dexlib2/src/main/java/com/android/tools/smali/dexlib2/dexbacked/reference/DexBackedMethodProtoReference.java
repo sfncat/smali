@@ -45,6 +45,9 @@ public class DexBackedMethodProtoReference extends BaseMethodProtoReference {
     @Nonnull public final DexBackedDexFile dexFile;
     private final int protoIndex;
 
+    private static final int MAX_PARAMETER_COUNT = 256;
+    private static final String MALFORMED_TYPE = "Ljava/lang/Object;";
+
     public DexBackedMethodProtoReference(@Nonnull DexBackedDexFile dexFile, int protoIndex) {
         this.dexFile = dexFile;
         this.protoIndex = protoIndex;
@@ -53,17 +56,37 @@ public class DexBackedMethodProtoReference extends BaseMethodProtoReference {
     @Nonnull
     @Override
     public List<String> getParameterTypes() {
-        final int parametersOffset = dexFile.getBuffer().readSmallUint(dexFile.getProtoSection().getOffset(protoIndex) +
-                ProtoIdItem.PARAMETERS_OFFSET);
+        final int protoOffset;
+        try {
+            protoOffset = dexFile.getProtoSection().getOffset(protoIndex);
+        } catch (RuntimeException ex) {
+            System.err.println("dexlib2: malformed proto ref (protoIndex=" + protoIndex
+                    + "): " + ex.getMessage());
+            return Collections.emptyList();
+        }
+        final int parametersOffset = dexFile.getBuffer().readSmallUint(
+                protoOffset + ProtoIdItem.PARAMETERS_OFFSET);
         if (parametersOffset > 0) {
-            final int parameterCount = dexFile.getDataBuffer().readSmallUint(
+            final int rawCount = dexFile.getDataBuffer().readSmallUint(
                     parametersOffset + TypeListItem.SIZE_OFFSET);
+            if (rawCount < 0 || rawCount > MAX_PARAMETER_COUNT) {
+                System.err.println("dexlib2: malformed proto ref param count (protoIndex="
+                        + protoIndex + ", parameterCount=" + rawCount + " > "
+                        + MAX_PARAMETER_COUNT + "), treating as empty");
+                return Collections.emptyList();
+            }
+            final int parameterCount = rawCount;
             final int paramListStart = parametersOffset + TypeListItem.LIST_OFFSET;
             return new FixedSizeList<String>() {
                 @Nonnull
                 @Override
                 public String readItem(final int index) {
-                    return dexFile.getTypeSection().get(dexFile.getDataBuffer().readUshort(paramListStart + 2*index));
+                    try {
+                        return dexFile.getTypeSection().get(
+                                dexFile.getDataBuffer().readUshort(paramListStart + 2*index));
+                    } catch (RuntimeException ex) {
+                        return MALFORMED_TYPE;
+                    }
                 }
                 @Override public int size() { return parameterCount; }
             };
@@ -74,8 +97,14 @@ public class DexBackedMethodProtoReference extends BaseMethodProtoReference {
     @Nonnull
     @Override
     public String getReturnType() {
-        return dexFile.getTypeSection().get(dexFile.getBuffer().readSmallUint(
-                dexFile.getProtoSection().getOffset(protoIndex) + ProtoIdItem.RETURN_TYPE_OFFSET));
+        try {
+            return dexFile.getTypeSection().get(dexFile.getBuffer().readSmallUint(
+                    dexFile.getProtoSection().getOffset(protoIndex) + ProtoIdItem.RETURN_TYPE_OFFSET));
+        } catch (RuntimeException ex) {
+            System.err.println("dexlib2: malformed proto ref return type (protoIndex=" + protoIndex
+                    + "): " + ex.getMessage());
+            return MALFORMED_TYPE;
+        }
     }
 
     /**
