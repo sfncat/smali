@@ -125,6 +125,15 @@ task generateAccessorTestSource(type: JavaExec) {
 }
 compileAccessorTestJava.dependsOn(generateAccessorTestSource)
 
+// Diagnostic CLI: inspect a single DEX header and detect pseudo v41 layouts.
+//   ./gradlew :dexlib2:dexHeaderInspect --args="/path/to/file.dex"
+task dexHeaderInspect(type: JavaExec) {
+    group = 'verification'
+    description = 'Inspect a DEX header and report pseudo v41 detection.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.android.tools.smali.dexlib2.cli.DexHeaderInspect'
+}
+
 // You must manually execute this task to regenerate src/test/resources/accessorTest.dex
 task generateAccessorTestDex(type: JavaExec, dependsOn: compileAccessorTestJava) {
     def outputDex = file('src/test/resources/accessorTest.dex')
