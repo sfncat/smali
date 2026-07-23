@@ -97,37 +97,14 @@ public class ZipDexContainer implements MultiDexContainer<DexBackedDexFile> {
                     continue;
                 }
 
-                // There might be several dex files in zip entry since DEX v41
-                // (real container format). For "pseudo v41" or legacy dex, only the
-                // first dex is parsed.
+                // There might be several dex files in zip entry since DEX v41.
                 try (InputStream inputStream = zipFile.getInputStream(entry)) {
                     byte[] buf = InputStreamUtil.toByteArray(inputStream);
-                    DexBackedDexFile firstDex =
-                            new DexBackedDexFile(opcodes, buf, 0, true, 0);
-                    entries.put(entry.getName(), firstDex);
-
-                    if (firstDex.isContainer()) {
-                        int offset = firstDex.getFileSize();
-                        int i = 2;
-                        while (offset < buf.length) {
-                            DexBackedDexFile dex =
-                                    new DexBackedDexFile(opcodes, buf, 0, true, offset);
-                            if (!dex.isContainer()) {
-                                throw new InvalidFile(String.format(
-                                        "Sub-dex at offset 0x%x is not a container dex",
-                                        offset));
-                            }
-                            entries.put(entry.getName() + "/" + i, dex);
-                            int sz = dex.getFileSize();
-                            if (sz <= 0) {
-                                break;
-                            }
-                            offset += sz;
-                            i++;
-                        }
-                    }
-                } catch (ArrayIndexOutOfBoundsException ex) {
-                    // This is expected if the dex file is invalid.
+                    for (int offset = 0, i = 1; offset < buf.length; i++) {
+                      DexBackedDexFile dex = new DexBackedDexFile(opcodes, buf, 0, true, offset);
+                      entries.put(entry.getName() + (i > 1 ? ("/" + i) : ""), dex);
+                      offset += dex.getFileSize();
+                    };
                 }
             }
 
