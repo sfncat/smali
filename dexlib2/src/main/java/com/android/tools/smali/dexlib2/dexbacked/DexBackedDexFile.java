@@ -91,8 +91,11 @@ public class DexBackedDexFile implements DexFile {
     private final int mapOffset;
     private final int hiddenApiRestrictionsOffset;
     private final boolean container;
+    private final int headerOffset;
+    private final int containerSize;
 
-    protected DexBackedDexFile(@Nullable Opcodes opcodes, @Nonnull byte[] buf, int offset, boolean verifyMagic) {
+    protected DexBackedDexFile(@Nullable Opcodes opcodes, @Nonnull byte[] buf, int offset,
+                               boolean verifyMagic) {
         this(opcodes, buf, offset, verifyMagic, 0);
     }
 
@@ -134,6 +137,7 @@ public class DexBackedDexFile implements DexFile {
             hiddenApiRestrictionsOffset = DexWriter.NO_OFFSET;
         }
 
+        this.headerOffset = header_offset;
         int container_off = 0;
         // A real DEX v41 container also requires header_size >= 0x78. Some vendor
         // toolchains (e.g. Huawei/HOS) emit "pseudo v41" dex files whose magic
@@ -146,17 +150,22 @@ public class DexBackedDexFile implements DexFile {
         if (realContainer) {
             container_off = dexBuffer.readSmallUint(
                     header_offset + HeaderItem.CONTAINER_OFF_OFFSET);
+            this.containerSize = dexBuffer.readSmallUint(
+                    header_offset + HeaderItem.CONTAINER_SIZE_OFFSET);
             if (container_off != header_offset) {
                 throw new DexUtil.InvalidFile(String.format(
                         "Unexpected container offset in header: expected 0x%x, got 0x%x",
                         header_offset, container_off));
             }
-        } else if (dexVersion >= 41 && header_offset != 0) {
-            // A pseudo v41 dex must not appear at a non-zero offset, since that would
-            // imply it lives inside a container, which it does not actually support.
-            throw new DexUtil.InvalidFile(String.format(
-                    "Pseudo v41 dex (header_size=0x%x) cannot appear at non-zero offset 0x%x",
-                    headerSize, header_offset));
+        } else {
+            this.containerSize = this.fileSize;
+            if (dexVersion >= 41 && header_offset != 0) {
+                // A pseudo v41 dex must not appear at a non-zero offset, since that would
+                // imply it lives inside a container, which it does not actually support.
+                throw new DexUtil.InvalidFile(String.format(
+                        "Pseudo v41 dex (header_size=0x%x) cannot appear at non-zero offset 0x%x",
+                        headerSize, header_offset));
+            }
         }
         this.container = realContainer;
     }
@@ -174,6 +183,20 @@ public class DexBackedDexFile implements DexFile {
      */
     public int getFileSize() {
         return fileSize;
+    }
+
+    /**
+     * @return True if this is the first entry in a DEX container (or classic DEX).
+     */
+    public boolean isDexContainerFirstEntry() {
+        return headerOffset == 0;
+    }
+
+    /**
+     * @return True if this is the last entry in a DEX container, ignoring trailing garbage.
+     */
+    public boolean isDexContainerLastEntry() {
+        return headerOffset + fileSize >= containerSize;
     }
 
     /**
