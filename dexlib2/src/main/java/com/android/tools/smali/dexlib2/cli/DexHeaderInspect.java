@@ -101,7 +101,7 @@ public class DexHeaderInspect {
 
         // ----- v41 container fields -----
         int containerSizeField = readU32(buf, HeaderItem.CONTAINER_SIZE_OFFSET);
-        int containerOffField  = readU32(buf, HeaderItem.CONTAINER_OFF_OFFSET);
+        int containerOffField  = readU32(buf, HeaderItem.HEADER_OFFSET_OFFSET);
         System.out.printf("bytes@0x70    : 0x%08x  (would be container_size for real v41)%n",
                 containerSizeField);
         System.out.printf("bytes@0x74    : 0x%08x  (would be container_off  for real v41)%n",
